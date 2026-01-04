@@ -1,0 +1,8 @@
+{
+  "name": "GarenaEarn - Rút Gọn Link Kiếm Thẻ",
+  "description": "Nền tảng rút gọn link kiếm tiền hiện đại, uy tín với khả năng đổi thưởng thẻ Garena tự động và giao diện sang trọng.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
