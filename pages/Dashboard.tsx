@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-// Fix: Import Link component for navigation within the app
 import { Link } from 'react-router-dom';
 import { 
   Database, Activity, ShieldCheck, 
@@ -42,7 +41,7 @@ const Dashboard: React.FC<{ stats: UserStats, user: User }> = ({ stats, user }) 
   const avatarUrl = user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`;
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-700">
+    <div className="space-y-10 animate-in fade-in duration-700 min-h-[800px]">
       {/* Profile Section */}
       <div className="glass rounded-[40px] overflow-hidden border border-slate-800/50 shadow-[0_30px_60px_rgba(0,0,0,0.5)]">
          <div className="h-28 bg-gradient-to-r from-amber-600/20 via-slate-900 to-blue-600/10 border-b border-slate-800/50 relative overflow-hidden">
@@ -61,9 +60,9 @@ const Dashboard: React.FC<{ stats: UserStats, user: User }> = ({ stats, user }) 
             </div>
             
             <div className="mt-6">
-               <h2 className="text-4xl font-black text-white uppercase tracking-tighter italic">{user.name}</h2>
+               <h2 className="text-4xl font-black text-white uppercase tracking-tighter italic">{String(user.name)}</h2>
                <div className="flex items-center justify-center space-x-3 mt-2">
-                  <span className="text-amber-500 text-[10px] font-black uppercase tracking-[0.4em] italic">SECURE NODE ID: {user.id.slice(0, 8).toUpperCase()}</span>
+                  <span className="text-amber-500 text-[10px] font-black uppercase tracking-[0.4em] italic">SECURE NODE ID: {String(user.id).slice(0, 8).toUpperCase()}</span>
                   <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
                </div>
             </div>
@@ -75,14 +74,14 @@ const Dashboard: React.FC<{ stats: UserStats, user: User }> = ({ stats, user }) 
                   <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Cấp độ tài khoản</p>
                   <div className="flex items-center justify-center space-x-2 text-amber-500">
                      <Award size={18} />
-                     <span className="text-lg font-black uppercase italic tracking-tighter">{level}</span>
+                     <span className="text-lg font-black uppercase italic tracking-tighter">{String(level)}</span>
                   </div>
                </div>
                <div className="p-6 bg-slate-950/50 border border-slate-900 rounded-[24px] space-y-2">
                   <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Ngày gia nhập</p>
                   <div className="flex items-center justify-center space-x-2 text-white">
                      <Calendar size={18} className="text-slate-700" />
-                     <span className="text-lg font-black uppercase italic tracking-tighter">{user.joinDate}</span>
+                     <span className="text-lg font-black uppercase italic tracking-tighter">{String(user.joinDate)}</span>
                   </div>
                </div>
                <div className="p-6 bg-slate-950/50 border border-slate-900 rounded-[24px] space-y-2">
@@ -97,7 +96,7 @@ const Dashboard: React.FC<{ stats: UserStats, user: User }> = ({ stats, user }) 
       </div>
 
       {/* Stats Section */}
-      <div className="space-y-6 pt-4">
+      <div className="space-y-6 pt-4 min-h-[350px]">
         <div className="flex items-center space-x-3">
            <Database className="text-blue-500" size={28} />
            <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic">Bảng tin hệ thống <span className="text-slate-700 text-xs ml-2 tracking-[0.2em] font-black not-italic">REAL-TIME DATA</span></h2>
@@ -108,7 +107,7 @@ const Dashboard: React.FC<{ stats: UserStats, user: User }> = ({ stats, user }) 
               <div className="absolute top-0 right-0 p-6 opacity-5 rotate-12"><Activity size={80} /></div>
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6 italic">Hoạt động thành viên</p>
               <div className="flex items-end justify-between">
-                 <h3 className="text-5xl font-black text-white italic tracking-tighter">{sysStats.totalUsers}</h3>
+                 <h3 className="text-5xl font-black text-white italic tracking-tighter">{String(sysStats.totalUsers)}</h3>
                  <span className="text-[11px] font-black text-emerald-500 uppercase tracking-widest border border-emerald-500/20 px-4 py-1.5 rounded-xl">Thành viên</span>
               </div>
            </div>

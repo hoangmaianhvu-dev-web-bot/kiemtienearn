@@ -6,7 +6,7 @@ import {
   Menu, Trophy, LogOut, Search, 
   MessageSquare, Store, ShieldAlert,
   CheckCircle2, XCircle, AlertTriangle, Info, Bell,
-  Sparkles, MessageCircle, Phone, Send, ExternalLink, X
+  Sparkles, MessageCircle, Phone, Send, ExternalLink, X, ShieldCheck
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard.tsx';
@@ -94,16 +94,15 @@ const App: React.FC = () => {
 
   const notify = (message: string, type: ToastType) => {
     const id = Math.random().toString(36).substr(2, 9);
-    setToasts(prev => [...prev, { id, message, type }]);
+    setToasts(prev => [...prev, { id: String(id), message: String(message), type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
+    }, 5000);
   };
 
   const updateUser = (user: User) => {
     setCurrentUser(user);
     localStorage.setItem('ge_user_session', JSON.stringify(user));
-    // Đồng thời cập nhật vào database user tổng nếu có
     const usersDB = JSON.parse(localStorage.getItem('ge_users_db') || '[]');
     const updatedDB = usersDB.map((u: any) => u.id === user.id ? { ...u, balance: user.balance } : u);
     localStorage.setItem('ge_users_db', JSON.stringify(updatedDB));
@@ -111,13 +110,13 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     updateUser(user);
-    notify(`Chào mừng ${user.name} đã gia nhập hệ thống!`, 'SUCCESS');
+    notify(`Chào mừng ${user.name} đã gia nhập hệ thống GarenaEarn!`, 'SUCCESS');
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('ge_user_session');
-    notify("Phiên làm việc đã kết thúc.", "CANCEL");
+    notify("Đã kết thúc phiên làm việc an toàn.", "CANCEL");
   };
 
   if (loading) return (
@@ -199,7 +198,7 @@ const App: React.FC = () => {
               <div className="p-6 md:p-10 max-w-7xl mx-auto w-full pb-32">
                 <Routes>
                   <Route path="/" element={<Dashboard stats={userStats} user={currentUser} />} />
-                  <Route path="/marketplace" element={<Marketplace balance={currentUser.balance} />} />
+                  <Route path="/marketplace" element={<Marketplace user={currentUser} />} />
                   <Route path="/chat" element={<ChatRoom user={currentUser} />} />
                   <Route path="/tasks" element={<TaskList />} />
                   <Route path="/links" element={<MyLinks stats={userStats} userId={currentUser.id} />} />
@@ -244,10 +243,10 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Toasts... */}
-        <div className="fixed top-10 right-10 z-[100] flex flex-col items-end space-y-4 pointer-events-none">
+        {/* Toasts Container */}
+        <div className="fixed top-10 right-6 z-[100] flex flex-col items-end space-y-4 pointer-events-none">
           {toasts.map(t => (
-            <ToastItem key={t.id} toast={t} />
+            <ToastItem key={t.id} toast={t} onRemove={(id) => setToasts(prev => prev.filter(x => x.id !== id))} />
           ))}
         </div>
       </HashRouter>
@@ -265,37 +264,108 @@ const SupportLink = ({ icon: Icon, label, href, color }: any) => (
   </a>
 );
 
-const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => {
+const ToastItem: React.FC<{ toast: Toast, onRemove: (id: string) => void }> = ({ toast, onRemove }) => {
+  const [progress, setProgress] = useState(100);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setProgress(prev => Math.max(0, prev - (100 / 50))); // 50 intervals per 5s
+    }, 100);
+    return () => clearInterval(timer);
+  }, []);
+
   const icons = {
-    SUCCESS: <CheckCircle2 className="text-emerald-500" size={20} />,
-    ERROR: <XCircle className="text-red-500" size={20} />,
-    CANCEL: <XCircle className="text-slate-500" size={20} />,
-    WARNING: <AlertTriangle className="text-amber-500" size={20} />,
-    INFO: <Info className="text-blue-500" size={20} />
+    SUCCESS: <CheckCircle2 className="text-emerald-400" size={20} />,
+    ERROR: <XCircle className="text-rose-400" size={20} />,
+    CANCEL: <XCircle className="text-slate-400" size={20} />,
+    WARNING: <AlertTriangle className="text-amber-400" size={20} />,
+    INFO: <Info className="text-sky-400" size={20} />
   };
 
-  const colors = {
-    SUCCESS: 'border-emerald-500/20 bg-emerald-500/5',
-    ERROR: 'border-red-500/20 bg-red-500/5',
-    CANCEL: 'border-slate-500/20 bg-slate-500/5',
-    WARNING: 'border-amber-500/20 bg-amber-500/5',
-    INFO: 'border-blue-500/20 bg-blue-500/5'
+  const themes = {
+    SUCCESS: {
+      border: 'border-emerald-500/30',
+      bg: 'bg-emerald-500/5',
+      glow: 'shadow-[0_0_40px_rgba(16,185,129,0.15)]',
+      progress: 'bg-emerald-500',
+      label: 'THÀNH CÔNG',
+      labelColor: 'text-emerald-500'
+    },
+    ERROR: {
+      border: 'border-rose-500/30',
+      bg: 'bg-rose-500/5',
+      glow: 'shadow-[0_0_40px_rgba(244,63,94,0.15)]',
+      progress: 'bg-rose-500',
+      label: 'LỖI HỆ THỐNG',
+      labelColor: 'text-rose-500'
+    },
+    CANCEL: {
+      border: 'border-slate-500/30',
+      bg: 'bg-slate-500/5',
+      glow: 'shadow-[0_0_40px_rgba(100,116,139,0.15)]',
+      progress: 'bg-slate-500',
+      label: 'ĐÃ HỦY',
+      labelColor: 'text-slate-500'
+    },
+    WARNING: {
+      border: 'border-amber-500/30',
+      bg: 'bg-amber-500/5',
+      glow: 'shadow-[0_0_40px_rgba(245,158,11,0.15)]',
+      progress: 'bg-amber-500',
+      label: 'CẢNH BÁO',
+      labelColor: 'text-amber-500'
+    },
+    INFO: {
+      border: 'border-sky-500/30',
+      bg: 'bg-sky-500/5',
+      glow: 'shadow-[0_0_40px_rgba(14,165,233,0.15)]',
+      progress: 'bg-sky-500',
+      label: 'THÔNG TIN',
+      labelColor: 'text-sky-500'
+    }
   };
+
+  const theme = themes[toast.type];
 
   return (
-    <div className={`pointer-events-auto flex items-center space-x-5 p-6 rounded-[32px] border glass backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in slide-in-from-right-10 duration-500 min-w-[380px] max-w-md ${colors[toast.type]}`}>
-      <div className="shrink-0 relative">
-        <GarenaLogo size={50} className="shadow-2xl shadow-orange-500/20" />
-        <div className="absolute -bottom-1 -right-1 bg-slate-950 rounded-full p-1 border border-slate-800">
-          {icons[toast.type]}
+    <div className={`pointer-events-auto relative group overflow-hidden flex flex-col min-w-[360px] max-w-md glass backdrop-blur-[40px] border rounded-[28px] ${theme.border} ${theme.bg} ${theme.glow} animate-in slide-in-from-right-20 fade-in duration-500 shadow-2xl`}>
+      <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+      
+      <div className="p-5 flex items-start gap-4">
+        <div className="shrink-0 relative">
+          <div className="w-14 h-14 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center shadow-inner">
+             <GarenaLogo size={36} />
+          </div>
+          <div className={`absolute -bottom-1 -right-1 rounded-lg p-1.5 bg-slate-950 border border-slate-800 shadow-xl`}>
+            {icons[toast.type]}
+          </div>
+        </div>
+
+        <div className="flex-1 pt-1">
+          <div className="flex items-center justify-between mb-1.5">
+             <div className="flex items-center gap-2">
+                <Sparkles size={10} className="text-amber-500 animate-pulse" />
+                <span className={`text-[9px] font-black uppercase tracking-[0.3em] ${theme.labelColor}`}>{theme.label}</span>
+             </div>
+             <button onClick={() => onRemove(toast.id)} className="text-slate-600 hover:text-white transition-colors">
+                <X size={14} />
+             </button>
+          </div>
+          <p className="text-[11px] font-black text-white leading-relaxed uppercase tracking-tight italic">
+            {toast.message}
+          </p>
+          <div className="mt-3 flex items-center gap-1.5 opacity-40">
+             <ShieldCheck size={10} className="text-emerald-500" />
+             <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">GARENAEARN SECURED NODE</span>
+          </div>
         </div>
       </div>
-      <div className="flex-1">
-        <div className="flex items-center gap-2 mb-1">
-           <Sparkles size={10} className="text-amber-500" />
-           <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em]">HỆ THỐNG GARENAEARN</p>
-        </div>
-        <p className="text-[11px] font-black text-white leading-relaxed uppercase tracking-tight italic">{toast.message}</p>
+
+      <div className="h-[3px] w-full bg-slate-900/50">
+        <div 
+          className={`h-full transition-all duration-100 ease-linear ${theme.progress}`}
+          style={{ width: `${progress}%` }}
+        />
       </div>
     </div>
   );

@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Store, ShieldCheck, Zap, ShoppingCart, Star, Filter, Search, ExternalLink, Box, Gamepad2, Package } from 'lucide-react';
-import { MarketProduct, ProductType } from '../types';
+import { MarketProduct, ProductType, User } from '../types';
 import { useNotify } from '../App';
 
-const Marketplace: React.FC<{ balance: number }> = ({ balance }) => {
-  const { notify } = useNotify();
+const Marketplace: React.FC<{ user: User }> = ({ user }) => {
+  const { notify, updateUser } = useNotify();
   const [activeTab, setActiveTab] = useState<ProductType>('GAME');
   const [products, setProducts] = useState<MarketProduct[]>([]);
 
@@ -15,9 +15,9 @@ const Marketplace: React.FC<{ balance: number }> = ({ balance }) => {
       setProducts(JSON.parse(saved));
     } else {
       const initial: MarketProduct[] = [
-        { id: 'm1', title: 'Acc Liên Quân - Full Skin SSS - Top 1 SV', price: 2500000, description: 'Verified', image: 'https://picsum.photos/seed/lq1/400/300', tag: 'LIMITED', seller: 'ADMIN', type: 'GAME', gameCategory: 'ACC' },
-        { id: 'm2', title: 'Aimlock Pro v4.2 - No Recoil / No Ban', price: 500000, description: 'Secure', image: 'https://picsum.photos/seed/aim/400/300', tag: 'HOT', seller: 'ADMIN', type: 'GAME', gameCategory: 'AIM' },
-        { id: 'm3', title: 'Buff Màn Hình iPad View - 120FPS', price: 200000, description: 'Stable', image: 'https://picsum.photos/seed/buff/400/300', tag: 'NEW', seller: 'ADMIN', type: 'GAME', gameCategory: 'BUFF' },
+        { id: 'm1', title: 'Acc Liên Quân - Full Skin SSS - Top 1 SV', price: 2500000, description: 'Verified', image: 'https://picsum.photos/seed/lq1/400/300', tag: 'LIMITED', seller: 'ADMIN', type: 'GAME', gameCategory: 'ACC', externalUrl: 'https://garena.vn' },
+        { id: 'm2', title: 'Aimlock Pro v4.2 - No Recoil / No Ban', price: 500000, description: 'Secure', image: 'https://picsum.photos/seed/aim/400/300', tag: 'HOT', seller: 'ADMIN', type: 'GAME', gameCategory: 'AIM', externalUrl: 'https://garena.vn' },
+        { id: 'm3', title: 'Buff Màn Hình iPad View - 120FPS', price: 200000, description: 'Stable', image: 'https://picsum.photos/seed/buff/400/300', tag: 'NEW', seller: 'ADMIN', type: 'GAME', gameCategory: 'BUFF', externalUrl: 'https://garena.vn' },
         { id: 'm4', title: 'Áo Khoác Garena Esports 2025', price: 450000, description: 'Vật phẩm thực tế', image: 'https://picsum.photos/seed/jacket/400/300', tag: 'OFFICIAL', seller: 'ADMIN', type: 'GOODS', externalUrl: 'https://shopee.vn' },
       ];
       setProducts(initial);
@@ -28,11 +28,38 @@ const Marketplace: React.FC<{ balance: number }> = ({ balance }) => {
   const handleBuy = (p: MarketProduct) => {
     if (p.type === 'GOODS') {
       notify(`Đang chuyển hướng sang link mua ngoài: ${p.title}`, "INFO");
-      setTimeout(() => window.open(p.externalUrl, '_blank'), 1000);
+      if (p.externalUrl) {
+        setTimeout(() => window.open(p.externalUrl, '_blank'), 1500);
+      }
       return;
     }
-    if (balance < p.price) { notify("Số dư của bạn không đủ!", "ERROR"); return; }
-    notify(`Yêu cầu mua ${p.title} đã được gửi! Admin sẽ gửi thông tin qua Telegram.`, "SUCCESS");
+
+    // Logic thanh toán cho sản phẩm GAME
+    if (user.balance < p.price) { 
+      notify("Số dư của bạn không đủ để thanh toán sản phẩm này!", "ERROR"); 
+      return; 
+    }
+
+    // Thực hiện trừ tiền
+    const newBalance = user.balance - p.price;
+    const updatedUser = { ...user, balance: newBalance };
+    
+    // Cập nhật trạng thái người dùng toàn hệ thống
+    updateUser(updatedUser);
+
+    notify(`Thanh toán thành công ${p.price.toLocaleString()}đ. Đang lấy dữ liệu sản phẩm...`, "SUCCESS");
+
+    // Tự động chuyển tiếp qua link sản phẩm sau 2 giây
+    if (p.externalUrl) {
+      setTimeout(() => {
+        window.open(p.externalUrl, '_blank');
+        notify("Hệ thống đã chuyển hướng bạn đến link tải/hướng dẫn sản phẩm.", "INFO");
+      }, 2000);
+    } else {
+      setTimeout(() => {
+        notify("Sản phẩm này hiện chưa có link đính kèm, vui lòng liên hệ Admin.", "WARNING");
+      }, 2000);
+    }
   };
 
   const filtered = products.filter(p => p.type === activeTab);
@@ -76,7 +103,7 @@ const Marketplace: React.FC<{ balance: number }> = ({ balance }) => {
                   <ShieldCheck size={14} />
                   <span>VERIFIED BY ADMIN</span>
                </div>
-               <h3 className="text-xl font-black text-white mb-6 line-clamp-2 leading-tight group-hover:text-amber-500 transition-colors uppercase italic tracking-tighter">{p.title}</h3>
+               <h3 className="text-xl font-black text-white mb-6 line-clamp-2 leading-tight group-hover:text-amber-500 transition-colors uppercase italic tracking-tighter">{String(p.title)}</h3>
                
                <div className="mt-auto space-y-8">
                   <div className="flex items-end justify-between border-b border-slate-900 pb-6">
@@ -98,10 +125,10 @@ const Marketplace: React.FC<{ balance: number }> = ({ balance }) => {
                   
                   <button 
                     onClick={() => handleBuy(p)}
-                    className={`w-full py-5 rounded-[28px] font-black flex items-center justify-center space-x-3 transition-all shadow-2xl ${p.type === 'GOODS' ? 'bg-emerald-600 hover:bg-white hover:text-emerald-600 text-white' : balance >= p.price ? 'bg-white text-slate-950 hover:bg-amber-500' : 'bg-slate-900 text-slate-700 border border-slate-800 cursor-not-allowed'}`}
+                    className={`w-full py-5 rounded-[28px] font-black flex items-center justify-center space-x-3 transition-all shadow-2xl ${p.type === 'GOODS' ? 'bg-emerald-600 hover:bg-white hover:text-emerald-600 text-white' : user.balance >= p.price ? 'bg-white text-slate-950 hover:bg-amber-500' : 'bg-slate-900 text-slate-700 border border-slate-800 cursor-not-allowed'}`}
                   >
                     {p.type === 'GOODS' ? <ExternalLink size={20} /> : <ShoppingCart size={20} />}
-                    <span className="uppercase tracking-[0.2em] text-[11px] italic">{p.type === 'GOODS' ? 'MUA NGOÀI WEB' : balance >= p.price ? 'MUA NGAY' : 'KHÔNG ĐỦ SỐ DƯ'}</span>
+                    <span className="uppercase tracking-[0.2em] text-[11px] italic">{p.type === 'GOODS' ? 'MUA NGOÀI WEB' : user.balance >= p.price ? 'MUA NGAY' : 'KHÔNG ĐỦ SỐ DƯ'}</span>
                   </button>
                </div>
             </div>
