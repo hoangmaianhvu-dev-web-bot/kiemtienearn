@@ -5,11 +5,19 @@ import { User } from '../types.ts';
 import TaskList from './TaskList.tsx';
 import { supabase, useNotify } from '../App.tsx';
 
+const INFINITE_BALANCE = 999999999999;
+
 const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const { syncProfile } = useNotify();
   const [realBalance, setRealBalance] = useState<number>(Number(user.balance ?? 0));
 
   useEffect(() => {
+    // Nếu là Admin hoặc Support, luôn giữ số dư vô hạn
+    if (user.role === 'ADMIN' || user.role === 'SUPPORT') {
+      setRealBalance(INFINITE_BALANCE);
+      return;
+    }
+
     const fetchBalance = async () => {
       try {
         const { data, error } = await supabase
@@ -25,9 +33,8 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
     };
 
     fetchBalance();
-  }, [user.id]);
+  }, [user.id, user.role]);
 
-  // Reset chart data to 0
   const chartData = useMemo(() => [
     { name: 'T2', revenue: 0 }, { name: 'T3', revenue: 0 },
     { name: 'T4', revenue: 0 }, { name: 'T5', revenue: 0 },
@@ -37,7 +44,6 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
   return (
     <div className="space-y-12 animate-in fade-in duration-1000">
-      {/* Profile Live Card */}
       <div className="glass rounded-[56px] overflow-hidden border border-white/5 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)]">
          <div className="h-48 bg-gradient-to-br from-amber-600/10 via-slate-950 to-blue-600/10 relative overflow-hidden">
             <div className="absolute inset-0 opacity-5 flex items-center justify-center">
@@ -85,7 +91,6 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
            <StatCard label="Hạ tầng bảo mật" value="2FA/AES" icon={ShieldCheck} color="text-emerald-500" sub="ENCRYPTED" />
       </div>
 
-      {/* Realtime Analytics */}
       <div className="space-y-10">
         <div className="flex items-center justify-between px-6">
            <div className="flex items-center space-x-4">
@@ -124,7 +129,6 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         </div>
       </div>
 
-      {/* Realtime Mission Hub */}
       <div className="space-y-12 pt-12">
         <div className="flex items-center justify-between px-6">
            <h2 className="text-4xl font-black text-white uppercase tracking-tighter italic leading-none">Mission <span className="text-amber-500">Live Hub</span></h2>
