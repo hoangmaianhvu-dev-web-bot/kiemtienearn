@@ -21,6 +21,17 @@ import AdminPanel from './pages/Admin/AdminPanel.tsx';
 
 import { User, UserStats } from './types.ts';
 
+// Helper an toàn cho LocalStorage
+export const safeParse = (key: string, fallback: any) => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : fallback;
+  } catch (e) {
+    console.error(`Error parsing ${key}:`, e);
+    return fallback;
+  }
+};
+
 export const GarenaLogo: React.FC<{ className?: string, size?: number }> = ({ className = "", size = 40 }) => (
   <div 
     className={`relative flex items-center justify-center rounded-[28%] bg-gradient-to-br from-[#FFB129] to-[#FF8A00] shadow-xl shadow-orange-500/20 overflow-hidden ${className}`}
@@ -67,7 +78,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [announcement, setAnnouncement] = useState(() => {
-    return localStorage.getItem('ge_announcement') || "HỆ THỐNG GARENAEARN v4.3 - CHÀO MỪNG THÀNH VIÊN MỚI - UY TÍN - HIỆN ĐẠI - TỰ ĐỘNG!";
+    return String(localStorage.getItem('ge_announcement') || "HỆ THỐNG GARENAEARN v4.3 - CHÀO MỪNG THÀNH VIÊN MỚI - UY TÍN - HIỆN ĐẠI - TỰ ĐỘNG!");
   });
 
   const [userStats, setUserStats] = useState<UserStats>({
@@ -84,9 +95,8 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
-    const saved = localStorage.getItem('ge_user_session');
-    if (saved) {
-      const user = JSON.parse(saved);
+    const user = safeParse('ge_user_session', null);
+    if (user) {
       setCurrentUser(user);
     }
     setLoading(false);
@@ -103,14 +113,14 @@ const App: React.FC = () => {
   const updateUser = (user: User) => {
     setCurrentUser(user);
     localStorage.setItem('ge_user_session', JSON.stringify(user));
-    const usersDB = JSON.parse(localStorage.getItem('ge_users_db') || '[]');
-    const updatedDB = usersDB.map((u: any) => u.id === user.id ? { ...u, balance: user.balance } : u);
+    const usersDB = safeParse('ge_users_db', []);
+    const updatedDB = usersDB.map((u: any) => u.id === user.id ? { ...u, balance: Number(user.balance) } : u);
     localStorage.setItem('ge_users_db', JSON.stringify(updatedDB));
   };
 
   const handleLogin = (user: User) => {
     updateUser(user);
-    notify(`Chào mừng ${user.name} đã gia nhập hệ thống GarenaEarn!`, 'SUCCESS');
+    notify(`Chào mừng ${String(user.name)} đã gia nhập hệ thống GarenaEarn!`, 'SUCCESS');
   };
 
   const handleLogout = () => {
@@ -131,11 +141,11 @@ const App: React.FC = () => {
   if (!currentUser) return <Login onLogin={handleLogin} />;
 
   return (
-    <AppContext.Provider value={{ notify, announcement, setAnnouncement: (text) => { setAnnouncement(text); localStorage.setItem('ge_announcement', text); }, updateUser }}>
+    <AppContext.Provider value={{ notify, announcement, setAnnouncement: (text) => { setAnnouncement(String(text)); localStorage.setItem('ge_announcement', String(text)); }, updateUser }}>
       <HashRouter>
         <div className="min-h-screen flex flex-col bg-[#020617] text-slate-200">
           <div className="marquee-container shadow-2xl">
-            <div className="marquee-text uppercase tracking-widest italic">{announcement}</div>
+            <div className="marquee-text uppercase tracking-widest italic">{String(announcement)}</div>
           </div>
 
           <div className="flex-1 flex overflow-hidden">
@@ -153,7 +163,7 @@ const App: React.FC = () => {
 
                 <nav className="flex-1 space-y-1 overflow-y-auto no-scrollbar">
                   {(currentUser.role === 'ADMIN' || currentUser.role === 'SUPPORT') && (
-                    <UserNavLink to="/admin" icon={ShieldAlert} label="ROOT TERMINAL" badge={currentUser.role} />
+                    <UserNavLink to="/admin" icon={ShieldAlert} label="ROOT TERMINAL" badge={String(currentUser.role)} />
                   )}
                   <UserNavLink to="/" icon={LayoutDashboard} label="Bảng điều khiển" />
                   <UserNavLink to="/tasks" icon={() => <GarenaLogo size={18} className="rounded-md" />} label="Làm nhiệm vụ" />
@@ -187,21 +197,21 @@ const App: React.FC = () => {
                 <div className="flex items-center space-x-6">
                   <div className="flex items-center space-x-3 bg-amber-500/5 border border-amber-500/10 px-6 py-2.5 rounded-2xl shadow-inner">
                     <Trophy size={18} className="text-amber-500" />
-                    <span className="font-black text-white text-lg tracking-tighter italic">{currentUser.balance.toLocaleString()}đ</span>
+                    <span className="font-black text-white text-lg tracking-tighter italic">{Number(currentUser.balance || 0).toLocaleString()}đ</span>
                   </div>
                   <Link to="/profile" className="w-11 h-11 rounded-2xl border-2 border-slate-800 overflow-hidden hover:border-amber-500 transition-all shadow-2xl">
-                    <img src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.name}`} alt="avatar" className="w-full h-full object-cover" />
+                    <img src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${String(currentUser.name)}`} alt="avatar" className="w-full h-full object-cover" />
                   </Link>
                 </div>
               </header>
 
-              <div className="p-6 md:p-10 max-w-7xl mx-auto w-full pb-32">
+              <div className="p-6 md:p-10 max-w-7xl mx-auto w-full pb-32 min-h-screen">
                 <Routes>
                   <Route path="/" element={<Dashboard stats={userStats} user={currentUser} />} />
                   <Route path="/marketplace" element={<Marketplace user={currentUser} />} />
                   <Route path="/chat" element={<ChatRoom user={currentUser} />} />
                   <Route path="/tasks" element={<TaskList />} />
-                  <Route path="/links" element={<MyLinks stats={userStats} userId={currentUser.id} />} />
+                  <Route path="/links" element={<MyLinks stats={userStats} userId={String(currentUser.id)} />} />
                   <Route path="/wallet" element={<WalletPage user={currentUser} />} />
                   <Route path="/profile" element={<Profile stats={userStats} />} />
                   <Route path="/admin" element={(currentUser.role === 'ADMIN' || currentUser.role === 'SUPPORT') ? <AdminPanel /> : <Navigate to="/" />} />
@@ -258,7 +268,7 @@ const SupportLink = ({ icon: Icon, label, href, color }: any) => (
   <a href={href} target="_blank" rel="noreferrer" className="flex items-center justify-between p-4 bg-slate-950 rounded-2xl border border-slate-900 hover:border-amber-500/50 transition-all group">
      <div className="flex items-center gap-3">
         <div className={`w-8 h-8 rounded-lg ${color} flex items-center justify-center text-white`}><Icon size={14} /></div>
-        <span className="text-[10px] font-black text-white uppercase tracking-wider">{label}</span>
+        <span className="text-[10px] font-black text-white uppercase tracking-wider">{String(label)}</span>
      </div>
      <ExternalLink size={14} className="text-slate-700 group-hover:text-amber-500" />
   </a>
@@ -269,7 +279,7 @@ const ToastItem: React.FC<{ toast: Toast, onRemove: (id: string) => void }> = ({
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setProgress(prev => Math.max(0, prev - (100 / 50))); // 50 intervals per 5s
+      setProgress(prev => Math.max(0, prev - (100 / 50))); 
     }, 100);
     return () => clearInterval(timer);
   }, []);
@@ -283,46 +293,11 @@ const ToastItem: React.FC<{ toast: Toast, onRemove: (id: string) => void }> = ({
   };
 
   const themes = {
-    SUCCESS: {
-      border: 'border-emerald-500/30',
-      bg: 'bg-emerald-500/5',
-      glow: 'shadow-[0_0_40px_rgba(16,185,129,0.15)]',
-      progress: 'bg-emerald-500',
-      label: 'THÀNH CÔNG',
-      labelColor: 'text-emerald-500'
-    },
-    ERROR: {
-      border: 'border-rose-500/30',
-      bg: 'bg-rose-500/5',
-      glow: 'shadow-[0_0_40px_rgba(244,63,94,0.15)]',
-      progress: 'bg-rose-500',
-      label: 'LỖI HỆ THỐNG',
-      labelColor: 'text-rose-500'
-    },
-    CANCEL: {
-      border: 'border-slate-500/30',
-      bg: 'bg-slate-500/5',
-      glow: 'shadow-[0_0_40px_rgba(100,116,139,0.15)]',
-      progress: 'bg-slate-500',
-      label: 'ĐÃ HỦY',
-      labelColor: 'text-slate-500'
-    },
-    WARNING: {
-      border: 'border-amber-500/30',
-      bg: 'bg-amber-500/5',
-      glow: 'shadow-[0_0_40px_rgba(245,158,11,0.15)]',
-      progress: 'bg-amber-500',
-      label: 'CẢNH BÁO',
-      labelColor: 'text-amber-500'
-    },
-    INFO: {
-      border: 'border-sky-500/30',
-      bg: 'bg-sky-500/5',
-      glow: 'shadow-[0_0_40px_rgba(14,165,233,0.15)]',
-      progress: 'bg-sky-500',
-      label: 'THÔNG TIN',
-      labelColor: 'text-sky-500'
-    }
+    SUCCESS: { border: 'border-emerald-500/30', bg: 'bg-emerald-500/5', glow: 'shadow-[0_0_40px_rgba(16,185,129,0.15)]', progress: 'bg-emerald-500', label: 'THÀNH CÔNG', labelColor: 'text-emerald-500' },
+    ERROR: { border: 'border-rose-500/30', bg: 'bg-rose-500/5', glow: 'shadow-[0_0_40px_rgba(244,63,94,0.15)]', progress: 'bg-rose-500', label: 'LỖI HỆ THỐNG', labelColor: 'text-rose-500' },
+    CANCEL: { border: 'border-slate-500/30', bg: 'bg-slate-500/5', glow: 'shadow-[0_0_40px_rgba(100,116,139,0.15)]', progress: 'bg-slate-500', label: 'ĐÃ HỦY', labelColor: 'text-slate-500' },
+    WARNING: { border: 'border-amber-500/30', bg: 'bg-amber-500/5', glow: 'shadow-[0_0_40px_rgba(245,158,11,0.15)]', progress: 'bg-amber-500', label: 'CẢNH BÁO', labelColor: 'text-amber-500' },
+    INFO: { border: 'border-sky-500/30', bg: 'bg-sky-500/5', glow: 'shadow-[0_0_40px_rgba(14,165,233,0.15)]', progress: 'bg-sky-500', label: 'THÔNG TIN', labelColor: 'text-sky-500' }
   };
 
   const theme = themes[toast.type];
@@ -345,14 +320,14 @@ const ToastItem: React.FC<{ toast: Toast, onRemove: (id: string) => void }> = ({
           <div className="flex items-center justify-between mb-1.5">
              <div className="flex items-center gap-2">
                 <Sparkles size={10} className="text-amber-500 animate-pulse" />
-                <span className={`text-[9px] font-black uppercase tracking-[0.3em] ${theme.labelColor}`}>{theme.label}</span>
+                <span className={`text-[9px] font-black uppercase tracking-[0.3em] ${theme.labelColor}`}>{String(theme.label)}</span>
              </div>
              <button onClick={() => onRemove(toast.id)} className="text-slate-600 hover:text-white transition-colors">
                 <X size={14} />
              </button>
           </div>
           <p className="text-[11px] font-black text-white leading-relaxed uppercase tracking-tight italic">
-            {toast.message}
+            {String(toast.message)}
           </p>
           <div className="mt-3 flex items-center gap-1.5 opacity-40">
              <ShieldCheck size={10} className="text-emerald-500" />
@@ -378,9 +353,9 @@ const UserNavLink: React.FC<{ to: string, icon: any, label: string, badge?: stri
     <Link to={to} className={`flex items-center justify-between px-6 py-4 rounded-2xl transition-all duration-300 group ${active ? 'bg-white text-slate-950 font-black shadow-2xl' : 'text-slate-500 hover:bg-slate-900/50 hover:text-white'}`}>
       <div className="flex items-center space-x-4">
         <Icon size={18} className={active ? 'text-amber-500' : ''} />
-        <span className="text-[10px] font-black uppercase tracking-[0.2em]">{label}</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.2em]">{String(label)}</span>
       </div>
-      {badge && <span className={`text-[8px] px-2 py-0.5 rounded-lg font-black bg-red-600 text-white uppercase`}>{badge}</span>}
+      {badge && <span className={`text-[8px] px-2 py-0.5 rounded-lg font-black bg-red-600 text-white uppercase`}>{String(badge)}</span>}
     </Link>
   );
 };
