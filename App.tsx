@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Wallet, User as UserIcon, 
@@ -21,35 +21,27 @@ import AdminPanel from './pages/Admin/AdminPanel.tsx';
 
 import { User, UserStats } from './types.ts';
 
-// Helper an toàn cho LocalStorage
+// Helper an toàn tuyệt đối cho LocalStorage
 export const safeParse = (key: string, fallback: any) => {
   try {
     const item = localStorage.getItem(key);
     if (!item) return fallback;
-    return JSON.parse(item);
+    const parsed = JSON.parse(item);
+    return parsed === null ? fallback : parsed;
   } catch (e) {
-    console.error(`Error parsing ${key}:`, e);
-    // Nếu dữ liệu hỏng, xóa nó để tránh crash ở các lần sau
-    localStorage.removeItem(key);
+    console.error(`Lỗi dữ liệu tại ${key}:`, e);
     return fallback;
   }
 };
 
 export const GarenaLogo: React.FC<{ className?: string, size?: number }> = ({ className = "", size = 40 }) => (
   <div 
-    className={`relative flex items-center justify-center rounded-[28%] bg-gradient-to-br from-[#FFB129] to-[#FF8A00] shadow-xl shadow-orange-500/20 overflow-hidden ${className}`}
+    className={`relative flex items-center justify-center rounded-[28%] bg-gradient-to-br from-[#FFB129] to-[#FF8A00] shadow-xl overflow-hidden ${className}`}
     style={{ width: size, height: size }}
   >
-    <svg 
-      viewBox="0 0 24 24" 
-      width={size * 0.6} 
-      height={size * 0.6} 
-      fill="currentColor" 
-      className="text-slate-950"
-    >
+    <svg viewBox="0 0 24 24" width={size * 0.6} height={size * 0.6} fill="currentColor" className="text-slate-950">
       <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
     </svg>
-    <div className="absolute inset-0 bg-white/10 opacity-0 hover:opacity-100 transition-opacity" />
   </div>
 );
 
@@ -74,32 +66,25 @@ const AppContext = createContext<{
 
 export const useNotify = () => useContext(AppContext);
 
-// Fix: ErrorBoundary class was having issues with inherited types for state and props in certain TypeScript environments.
-// Defining explicit interfaces for Props and State and passing them to React.Component resolves "Property 'state' does not exist" and "Property 'props' does not exist" errors.
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
-}
+interface ErrorBoundaryProps { children?: React.ReactNode; }
+interface ErrorBoundaryState { hasError: boolean; }
 
-interface ErrorBoundaryState {
-  hasError: boolean;
-}
-
+// Fix: Explicitly define the state property and make children optional to resolve TS errors where state/props are not recognized or children are falsely reported as missing
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false };
-  }
+  public state: ErrorBoundaryState = { hasError: false };
+
   static getDerivedStateFromError() { return { hasError: true }; }
+  
+  componentDidCatch(error: any, errorInfo: any) { console.error("Crash App:", error, errorInfo); }
+  
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-10 text-center">
-          <div className="glass p-10 rounded-[40px] border-red-500/30 max-w-lg">
-            <XCircle className="text-red-500 w-20 h-20 mx-auto mb-6" />
-            <h1 className="text-2xl font-black text-white uppercase mb-4">Lỗi Giao Diện</h1>
-            <p className="text-slate-400 text-sm mb-8">Hệ thống gặp sự cố khi hiển thị trang này. Vui lòng tải lại trang hoặc liên hệ hỗ trợ.</p>
-            <button onClick={() => window.location.reload()} className="px-8 py-3 bg-white text-slate-950 rounded-2xl font-black uppercase text-xs">Tải lại trang</button>
-          </div>
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-10 text-center">
+          <XCircle className="text-red-500 w-20 h-20 mb-6" />
+          <h1 className="text-2xl font-black text-white uppercase mb-4 italic">LỖI XUNG ĐỘT RENDER</h1>
+          <p className="text-slate-500 text-sm mb-8 uppercase tracking-widest font-black">Hệ thống đã tự động ngắt kết nối để bảo vệ dữ liệu. Vui lòng tải lại.</p>
+          <button onClick={() => window.location.reload()} className="px-10 py-4 bg-amber-500 text-slate-950 rounded-2xl font-black uppercase text-xs tracking-widest">Khởi động lại Terminal</button>
         </div>
       );
     }
@@ -113,93 +98,99 @@ const App: React.FC = () => {
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [announcement, setAnnouncement] = useState(() => {
-    return String(localStorage.getItem('ge_announcement') || "HỆ THỐNG GARENAEARN v4.3 - CHÀO MỪNG THÀNH VIÊN MỚI - UY TÍN - HIỆN ĐẠI - TỰ ĐỘNG!");
-  });
+  const isUpdating = useRef(false);
+
+  const [announcement, setAnnouncementState] = useState(() => 
+    String(localStorage.getItem('ge_announcement') || "CHÀO MỪNG ĐẾN VỚI GARENAEARN - HỆ THỐNG KIẾM TIỀN TỰ ĐỘNG UY TÍN HÀNG ĐẦU!")
+  );
 
   const [userStats, setUserStats] = useState<UserStats>({
-    balance: 0,
-    totalClicks: 0,
-    totalEarnings: 0,
-    referralCount: 0,
-    referralClicks: 0,
-    referralRegistrations: 0,
-    conversionRate: 0,
-    pendingCommission: 0,
-    withdrawnCommission: 0,
-    taskEarnings: 0
+    balance: 0, totalClicks: 0, totalEarnings: 0, referralCount: 0,
+    referralClicks: 0, referralRegistrations: 0, conversionRate: 0,
+    pendingCommission: 0, withdrawnCommission: 0, taskEarnings: 0
   });
 
   useEffect(() => {
-    try {
-      const user = safeParse('ge_user_session', null);
-      if (user && typeof user === 'object' && user.id) {
-        setCurrentUser(user as User);
+    const initApp = async () => {
+      try {
+        const session = safeParse('ge_user_session', null);
+        if (session && session.id) {
+          setCurrentUser(session);
+        }
+      } catch (e) {
+        console.error("Init Error", e);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("App init error:", err);
+    };
+    initApp();
+  }, []);
+
+  const notify = useCallback((message: string, type: ToastType) => {
+    // Ngăn chặn spam thông báo
+    const id = Date.now().toString(36);
+    setToasts(prev => {
+      if (prev.length > 3) return [...prev.slice(1), { id, message: String(message), type }];
+      return [...prev, { id, message: String(message), type }];
+    });
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  }, []);
+
+  const updateUser = useCallback((user: User) => {
+    if (isUpdating.current) return;
+    isUpdating.current = true;
+    
+    try {
+      const sanitizedUser = { ...user, balance: Number(user.balance || 0) };
+      setCurrentUser(sanitizedUser);
+      localStorage.setItem('ge_user_session', JSON.stringify(sanitizedUser));
+      
+      const usersDB = safeParse('ge_users_db', []);
+      if (Array.isArray(usersDB)) {
+        const updatedDB = usersDB.map((u: any) => 
+          u.id === sanitizedUser.id ? { ...u, balance: sanitizedUser.balance } : u
+        );
+        localStorage.setItem('ge_users_db', JSON.stringify(updatedDB));
+      }
     } finally {
-      setLoading(false);
+      setTimeout(() => { isUpdating.current = false; }, 100);
     }
   }, []);
 
-  const notify = (message: string, type: ToastType) => {
-    const id = Math.random().toString(36).substr(2, 9);
-    setToasts(prev => [...prev, { id: String(id), message: String(message), type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 5000);
-  };
+  const setAnnouncement = useCallback((text: string) => {
+    const val = String(text);
+    setAnnouncementState(val);
+    localStorage.setItem('ge_announcement', val);
+  }, []);
 
-  const updateUser = (user: User) => {
-    if (!user) return;
-    setCurrentUser(user);
-    localStorage.setItem('ge_user_session', JSON.stringify(user));
-    
-    // Đồng bộ với DB giả lập
-    const usersDB = safeParse('ge_users_db', []);
-    if (Array.isArray(usersDB)) {
-      const updatedDB = usersDB.map((u: any) => 
-        u.id === user.id ? { ...u, balance: Number(user.balance) } : u
-      );
-      localStorage.setItem('ge_users_db', JSON.stringify(updatedDB));
-    }
-  };
+  if (loading) return null;
 
-  const handleLogin = (user: User) => {
-    updateUser(user);
-    notify(`Chào mừng ${String(user.name)} đã gia nhập hệ thống GarenaEarn!`, 'SUCCESS');
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    localStorage.removeItem('ge_user_session');
-    notify("Đã kết thúc phiên làm việc an toàn.", "CANCEL");
-  };
-
-  if (loading) return null; // Để Loader ở index.html xử lý
-
-  if (!currentUser) return <Login onLogin={handleLogin} />;
+  if (!currentUser) return <Login onLogin={(u) => { 
+    updateUser(u); 
+    notify(`Xin chào ${String(u.name)}!`, "SUCCESS"); 
+  }} />;
 
   return (
     <ErrorBoundary>
-      <AppContext.Provider value={{ notify, announcement, setAnnouncement: (text) => { setAnnouncement(String(text)); localStorage.setItem('ge_announcement', String(text)); }, updateUser }}>
+      <AppContext.Provider value={{ notify, announcement, setAnnouncement, updateUser }}>
         <HashRouter>
-          <div className="min-h-screen flex flex-col bg-[#020617] text-slate-200">
+          <div className="min-h-screen flex flex-col bg-[#020617] text-slate-200 selection:bg-amber-500/30">
             <div className="marquee-container shadow-2xl">
-              <div className="marquee-text uppercase tracking-widest italic">{String(announcement)}</div>
+              <div className="marquee-text italic">{String(announcement)}</div>
             </div>
 
             <div className="flex-1 flex overflow-hidden">
-              {isSidebarOpen && <div className="fixed inset-0 bg-black/90 z-50 lg:hidden backdrop-blur-xl" onClick={() => setIsSidebarOpen(false)} />}
+              {isSidebarOpen && <div className="fixed inset-0 bg-black/80 z-50 lg:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />}
               
-              <aside className={`fixed inset-y-0 left-0 w-72 glass border-r border-slate-800/50 z-50 transform transition-transform duration-500 lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+              <aside className={`fixed inset-y-0 left-0 w-72 glass border-r border-slate-800/30 z-50 transform transition-transform duration-500 lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="h-full flex flex-col p-6">
-                  <div className="flex items-center space-x-3 mb-10">
-                    <GarenaLogo size={40} />
+                  <div className="flex items-center space-x-3 mb-10 px-2">
+                    <GarenaLogo size={36} />
                     <div className="flex flex-col">
-                      <span className="text-xl font-black tracking-tighter uppercase leading-none">GARENA<span className="text-amber-500">EARN</span></span>
-                      <span className="text-[8px] font-black text-slate-500 tracking-[0.3em] mt-1">MANAGEMENT NODE</span>
+                      <span className="text-lg font-black tracking-tighter uppercase leading-none italic">GARENA<span className="text-amber-500">EARN</span></span>
+                      <span className="text-[7px] font-black text-slate-500 tracking-[0.4em] mt-1 uppercase">Cloud Management</span>
                     </div>
                   </div>
 
@@ -208,7 +199,7 @@ const App: React.FC = () => {
                       <UserNavLink to="/admin" icon={ShieldAlert} label="ROOT TERMINAL" badge={String(currentUser.role)} />
                     )}
                     <UserNavLink to="/" icon={LayoutDashboard} label="Bảng điều khiển" />
-                    <UserNavLink to="/tasks" icon={() => <GarenaLogo size={18} className="rounded-md" />} label="Làm nhiệm vụ" />
+                    <UserNavLink to="/tasks" icon={() => <GarenaLogo size={16} />} label="Làm nhiệm vụ" />
                     <UserNavLink to="/marketplace" icon={Store} label="CHỢ GIAO DỊCH" />
                     <UserNavLink to="/links" icon={Trophy} label="Affiliate Hub" />
                     <UserNavLink to="/chat" icon={MessageSquare} label="Phòng Chat" />
@@ -216,38 +207,38 @@ const App: React.FC = () => {
                     <UserNavLink to="/profile" icon={UserIcon} label="Hồ sơ cá nhân" />
                   </nav>
 
-                  <div className="mt-auto pt-6 border-t border-slate-900">
-                    <button onClick={handleLogout} className="w-full flex items-center justify-center space-x-3 py-4 text-slate-600 hover:text-red-500 transition-all font-black text-[9px] uppercase tracking-[0.3em]">
+                  <div className="mt-auto pt-6 border-t border-slate-900/50">
+                    <button onClick={() => { localStorage.removeItem('ge_user_session'); window.location.reload(); }} className="w-full flex items-center justify-center space-x-3 py-4 text-slate-600 hover:text-red-500 transition-all font-black text-[9px] uppercase tracking-[0.3em]">
                       <LogOut size={16} />
-                      <span>Dừng phiên làm việc</span>
+                      <span>ĐĂNG XUẤT</span>
                     </button>
                   </div>
                 </div>
               </aside>
 
-              <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto no-scrollbar relative">
-                <header className="sticky top-0 z-40 w-full glass border-b border-slate-800/50 px-6 py-4 flex items-center justify-between">
+              <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto no-scrollbar">
+                <header className="sticky top-0 z-40 w-full glass border-b border-slate-800/30 px-6 py-4 flex items-center justify-between">
                   <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-slate-400"><Menu size={24} /></button>
                   
                   <div className="flex-1 max-w-xl mx-8 hidden md:block">
                      <div className="relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-700" size={16} />
-                        <input type="text" placeholder="Tìm kiếm hệ thống..." className="w-full bg-slate-950 border border-slate-900 rounded-2xl py-2.5 pl-12 pr-6 text-[11px] font-black uppercase outline-none focus:border-amber-500/50 transition-all" />
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-700" size={14} />
+                        <input type="text" placeholder="TÌM KIẾM HỆ THỐNG..." className="w-full bg-slate-950/50 border border-slate-900 rounded-xl py-2 pl-12 pr-6 text-[10px] font-black uppercase outline-none focus:border-amber-500/30 transition-all" />
                      </div>
                   </div>
 
                   <div className="flex items-center space-x-6">
-                    <div className="flex items-center space-x-3 bg-amber-500/5 border border-amber-500/10 px-6 py-2.5 rounded-2xl shadow-inner">
-                      <Trophy size={18} className="text-amber-500" />
-                      <span className="font-black text-white text-lg tracking-tighter italic">{Number(currentUser.balance || 0).toLocaleString()}đ</span>
+                    <div className="flex items-center space-x-3 bg-amber-500/5 border border-amber-500/10 px-5 py-2 rounded-xl">
+                      <Trophy size={16} className="text-amber-500" />
+                      <span className="font-black text-white text-md tracking-tighter italic">{Number(currentUser.balance || 0).toLocaleString()}đ</span>
                     </div>
-                    <Link to="/profile" className="w-11 h-11 rounded-2xl border-2 border-slate-800 overflow-hidden hover:border-amber-500 transition-all shadow-2xl">
-                      <img src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${String(currentUser.name)}`} alt="avatar" className="w-full h-full object-cover" />
+                    <Link to="/profile" className="w-10 h-10 rounded-xl border border-slate-800 overflow-hidden hover:border-amber-500/50 transition-all">
+                      <img src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${String(currentUser.name)}`} alt="av" className="w-full h-full object-cover" />
                     </Link>
                   </div>
                 </header>
 
-                <div className="p-6 md:p-10 max-w-7xl mx-auto w-full pb-32 min-h-screen">
+                <div className="p-6 md:p-8 max-w-7xl mx-auto w-full pb-32">
                   <Routes>
                     <Route path="/" element={<Dashboard stats={userStats} user={currentUser} />} />
                     <Route path="/marketplace" element={<Marketplace user={currentUser} />} />
@@ -261,33 +252,21 @@ const App: React.FC = () => {
                   </Routes>
                 </div>
 
-                {/* Support Floating Button */}
-                <div className="fixed bottom-10 right-10 z-[60]">
+                <div className="fixed bottom-8 right-8 z-[60]">
                    {isSupportOpen ? (
-                      <div className="glass rounded-[32px] w-80 p-6 border border-amber-500/30 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-in zoom-in-90 slide-in-from-bottom-10 duration-300 mb-4">
-                         <div className="flex justify-between items-center mb-6">
-                            <div className="flex items-center gap-3">
-                               <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center text-slate-950"><Phone size={20} /></div>
-                               <div>
-                                  <h3 className="text-sm font-black text-white uppercase italic">Hỗ Trợ Garena</h3>
-                                  <p className="text-[8px] font-black text-emerald-500 uppercase">Online 24/7</p>
-                               </div>
-                            </div>
-                            <button onClick={() => setIsSupportOpen(false)} className="text-slate-600 hover:text-white"><X size={20} /></button>
+                      <div className="glass rounded-3xl w-72 p-5 border border-amber-500/20 shadow-2xl animate-in zoom-in-95 duration-200 mb-4">
+                         <div className="flex justify-between items-center mb-5">
+                            <span className="text-[10px] font-black text-white uppercase italic tracking-widest">Hỗ trợ 24/7</span>
+                            <button onClick={() => setIsSupportOpen(false)} className="text-slate-500 hover:text-white"><X size={18} /></button>
                          </div>
-                         
-                         <div className="space-y-3">
-                            <SupportLink icon={Phone} label="Zalo: 0337117930" href="https://zalo.me/0337117930" color="bg-blue-600" />
-                            <SupportLink icon={Send} label="Telegram: @VanhTRUM" href="https://t.me/VanhTRUM" color="bg-cyan-500" />
-                            <SupportLink icon={ExternalLink} label="Group Cộng Đồng" href="https://t.me/+JzOTfYqCwAU4MzE1" color="bg-orange-600" />
+                         <div className="space-y-2">
+                            <SupportLink icon={Send} label="Telegram: @VanhTRUM" href="https://t.me/VanhTRUM" />
+                            <SupportLink icon={Phone} label="Zalo Admin" href="https://zalo.me/0337117930" />
                          </div>
                       </div>
                    ) : (
-                      <button 
-                        onClick={() => setIsSupportOpen(true)}
-                        className="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center text-slate-950 shadow-[0_10px_40px_rgba(245,158,11,0.4)] hover:scale-110 active:scale-95 transition-all animate-bounce"
-                      >
-                         <MessageCircle size={32} />
+                      <button onClick={() => setIsSupportOpen(true)} className="w-14 h-14 bg-amber-500 rounded-2xl flex items-center justify-center text-slate-950 shadow-xl hover:scale-110 active:scale-95 transition-all">
+                         <MessageCircle size={28} />
                       </button>
                    )}
                 </div>
@@ -295,10 +274,9 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Toasts Container */}
-          <div className="fixed top-10 right-6 z-[100] flex flex-col items-end space-y-4 pointer-events-none">
+          <div className="fixed top-12 right-6 z-[100] flex flex-col items-end space-y-3 pointer-events-none">
             {toasts.map(t => (
-              <ToastItem key={t.id} toast={t} onRemove={(id) => setToasts(prev => prev.filter(x => x.id !== id))} />
+              <ToastItem key={t.id} toast={t} />
             ))}
           </div>
         </HashRouter>
@@ -307,84 +285,26 @@ const App: React.FC = () => {
   );
 };
 
-const SupportLink = ({ icon: Icon, label, href, color }: any) => (
-  <a href={href} target="_blank" rel="noreferrer" className="flex items-center justify-between p-4 bg-slate-950 rounded-2xl border border-slate-900 hover:border-amber-500/50 transition-all group">
-     <div className="flex items-center gap-3">
-        <div className={`w-8 h-8 rounded-lg ${color} flex items-center justify-center text-white`}><Icon size={14} /></div>
-        <span className="text-[10px] font-black text-white uppercase tracking-wider">{String(label)}</span>
-     </div>
-     <ExternalLink size={14} className="text-slate-700 group-hover:text-amber-500" />
+const SupportLink = ({ icon: Icon, label, href }: any) => (
+  <a href={href} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 bg-slate-950/50 border border-slate-900 rounded-xl hover:border-amber-500/30 transition-all group">
+     <Icon size={14} className="text-amber-500" />
+     <span className="text-[9px] font-black text-slate-400 group-hover:text-white uppercase tracking-widest">{String(label)}</span>
   </a>
 );
 
-const ToastItem: React.FC<{ toast: Toast, onRemove: (id: string) => void }> = ({ toast, onRemove }) => {
-  const [progress, setProgress] = useState(100);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setProgress(prev => Math.max(0, prev - (100 / 50))); 
-    }, 100);
-    return () => clearInterval(timer);
-  }, []);
-
-  const icons = {
-    SUCCESS: <CheckCircle2 className="text-emerald-400" size={20} />,
-    ERROR: <XCircle className="text-rose-400" size={20} />,
-    CANCEL: <XCircle className="text-slate-400" size={20} />,
-    WARNING: <AlertTriangle className="text-amber-400" size={20} />,
-    INFO: <Info className="text-sky-400" size={20} />
-  };
-
+const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => {
   const themes = {
-    SUCCESS: { border: 'border-emerald-500/30', bg: 'bg-emerald-500/5', glow: 'shadow-[0_0_40px_rgba(16,185,129,0.15)]', progress: 'bg-emerald-500', label: 'THÀNH CÔNG', labelColor: 'text-emerald-500' },
-    ERROR: { border: 'border-rose-500/30', bg: 'bg-rose-500/5', glow: 'shadow-[0_0_40px_rgba(244,63,94,0.15)]', progress: 'bg-rose-500', label: 'LỖI HỆ THỐNG', labelColor: 'text-rose-500' },
-    CANCEL: { border: 'border-slate-500/30', bg: 'bg-slate-500/5', glow: 'shadow-[0_0_40px_rgba(100,116,139,0.15)]', progress: 'bg-slate-500', label: 'ĐÃ HỦY', labelColor: 'text-slate-500' },
-    WARNING: { border: 'border-amber-500/30', bg: 'bg-amber-500/5', glow: 'shadow-[0_0_40px_rgba(245,158,11,0.15)]', progress: 'bg-amber-500', label: 'CẢNH BÁO', labelColor: 'text-amber-500' },
-    INFO: { border: 'border-sky-500/30', bg: 'bg-sky-500/5', glow: 'shadow-[0_0_40px_rgba(14,165,233,0.15)]', progress: 'bg-sky-500', label: 'THÔNG TIN', labelColor: 'text-sky-500' }
+    SUCCESS: 'border-emerald-500/30 bg-emerald-500/5 text-emerald-500',
+    ERROR: 'border-red-500/30 bg-red-500/5 text-red-500',
+    CANCEL: 'border-slate-500/30 bg-slate-500/5 text-slate-500',
+    WARNING: 'border-amber-500/30 bg-amber-500/5 text-amber-500',
+    INFO: 'border-blue-500/30 bg-blue-500/5 text-blue-500'
   };
-
-  const theme = themes[toast.type];
 
   return (
-    <div className={`pointer-events-auto relative group overflow-hidden flex flex-col min-w-[360px] max-w-md glass backdrop-blur-[40px] border rounded-[28px] ${theme.border} ${theme.bg} ${theme.glow} animate-in slide-in-from-right-20 fade-in duration-500 shadow-2xl`}>
-      <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
-      
-      <div className="p-5 flex items-start gap-4">
-        <div className="shrink-0 relative">
-          <div className="w-14 h-14 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center shadow-inner">
-             <GarenaLogo size={36} />
-          </div>
-          <div className={`absolute -bottom-1 -right-1 rounded-lg p-1.5 bg-slate-950 border border-slate-800 shadow-xl`}>
-            {icons[toast.type]}
-          </div>
-        </div>
-
-        <div className="flex-1 pt-1">
-          <div className="flex items-center justify-between mb-1.5">
-             <div className="flex items-center gap-2">
-                <Sparkles size={10} className="text-amber-500 animate-pulse" />
-                <span className={`text-[9px] font-black uppercase tracking-[0.3em] ${theme.labelColor}`}>{String(theme.label)}</span>
-             </div>
-             <button onClick={() => onRemove(toast.id)} className="text-slate-600 hover:text-white transition-colors">
-                <X size={14} />
-             </button>
-          </div>
-          <p className="text-[11px] font-black text-white leading-relaxed uppercase tracking-tight italic">
-            {String(toast.message)}
-          </p>
-          <div className="mt-3 flex items-center gap-1.5 opacity-40">
-             <ShieldCheck size={10} className="text-emerald-500" />
-             <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">GARENAEARN SECURED NODE</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="h-[3px] w-full bg-slate-900/50">
-        <div 
-          className={`h-full transition-all duration-100 ease-linear ${theme.progress}`}
-          style={{ width: `${progress}%` }}
-        />
-      </div>
+    <div className={`p-4 border rounded-xl glass shadow-2xl animate-in slide-in-from-right-10 flex items-center gap-3 min-w-[280px] ${themes[toast.type]}`}>
+      {toast.type === 'SUCCESS' ? <CheckCircle2 size={16} /> : <Info size={16} />}
+      <span className="text-[10px] font-black uppercase tracking-tight italic">{String(toast.message)}</span>
     </div>
   );
 };
@@ -393,12 +313,12 @@ const UserNavLink: React.FC<{ to: string, icon: any, label: string, badge?: stri
   const location = useLocation();
   const active = location.pathname === to;
   return (
-    <Link to={to} className={`flex items-center justify-between px-6 py-4 rounded-2xl transition-all duration-300 group ${active ? 'bg-white text-slate-950 font-black shadow-2xl' : 'text-slate-500 hover:bg-slate-900/50 hover:text-white'}`}>
-      <div className="flex items-center space-x-4">
-        <Icon size={18} className={active ? 'text-amber-500' : ''} />
-        <span className="text-[10px] font-black uppercase tracking-[0.2em]">{String(label)}</span>
+    <Link to={to} className={`flex items-center justify-between px-5 py-3.5 rounded-xl transition-all group ${active ? 'bg-white text-slate-950 font-black shadow-lg' : 'text-slate-500 hover:text-white hover:bg-slate-900/40'}`}>
+      <div className="flex items-center space-x-3">
+        <Icon size={16} className={active ? 'text-amber-500' : ''} />
+        <span className="text-[9px] font-black uppercase tracking-[0.2em]">{String(label)}</span>
       </div>
-      {badge && <span className={`text-[8px] px-2 py-0.5 rounded-lg font-black bg-red-600 text-white uppercase`}>{String(badge)}</span>}
+      {badge && <span className="text-[7px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black uppercase tracking-widest">{String(badge)}</span>}
     </Link>
   );
 };
