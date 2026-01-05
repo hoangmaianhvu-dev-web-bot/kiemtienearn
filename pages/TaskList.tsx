@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Zap, ExternalLink, Clock, Info, Layers } from 'lucide-react';
 import { Task } from '../types';
@@ -58,7 +57,7 @@ const TaskList: React.FC = () => {
       setTasks(JSON.parse(saved));
     } else {
       const initial: Task[] = [
-        { id: 't1', title: 'Vượt link lấy mã Garena 20k - Link 1s', reward: 800, commission: 40, source: 'link4m', autoCredit: true, isSpecial: false, category: 'Traffic', time: '15s', limit: 10, done: 2 },
+        { id: 't1', title: 'Vượt link lấy mã Garena 20k - Link 1s', reward: 800, commission: 40, source: 'link4m', autoCredit: true, isSpecial: false, category: 'Traffic', time: '15s', limit: 10, done: 0 },
         { id: 't2', title: 'Review Ứng Dụng Liên Quân Mobile', reward: 5000, commission: 250, source: 'Admin', autoCredit: false, isSpecial: true, specialType: 'REV_APP', targetUrl: 'https://garena.vn', category: 'Special', time: '1m', limit: 1, done: 0 }
       ];
       setTasks(initial);

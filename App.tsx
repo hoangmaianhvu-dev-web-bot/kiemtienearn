@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext, useCallback, useRef, Component } from 'react';
+import React, { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Wallet, User as UserIcon, 
@@ -6,7 +6,7 @@ import {
   MessageSquare, Store, ShieldAlert,
   CheckCircle2, XCircle, AlertTriangle, Info, Bell,
   Sparkles, MessageCircle, Phone, Send, ExternalLink, X, ShieldCheck,
-  Server, Cpu, Activity
+  Server, Cpu, Activity, Link as LinkIcon, Database, Zap
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -22,7 +22,7 @@ import AdminPanel from './pages/Admin/AdminPanel.tsx';
 
 import { User } from './types.ts';
 
-// --- KẾT NỐI MÁY CHỦ THỰC SUPABASE ---
+// --- KẾT NỐI TRỰC TIẾP SUPABASE ---
 const SUPABASE_URL = 'https://tpuozqnnzqfahwlvtvss.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwdW96cW5uenFmYWh3bHZ0dnNzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NzU5MjM4MCwiZXhwIjoyMDgzMTY4MzgwfQ.zAPsJKbgad_vlaco-WfvBCAxp8whCgmgjnzgvlCRgJI';
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -63,10 +63,11 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   render() {
     if (this.state.hasError) return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-10 text-center">
-        <div className="glass p-10 rounded-[40px] border-red-500/20">
-          <XCircle size={48} className="text-red-500 mx-auto mb-4" />
-          <h2 className="text-white font-black uppercase italic tracking-tighter">Lỗi kết nối máy chủ Supabase</h2>
-          <button onClick={() => window.location.reload()} className="mt-6 px-8 py-3 bg-white text-black rounded-xl font-black text-[10px] uppercase">Thử lại</button>
+        <div className="glass p-12 rounded-[48px] border-red-500/20 max-w-md shadow-2xl">
+          <AlertTriangle size={64} className="text-red-500 mx-auto mb-6" />
+          <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter mb-4">HỆ THỐNG GIÁN ĐOẠN</h2>
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-8">Máy chủ Supabase không phản hồi hoặc kết nối mạng yếu.</p>
+          <button onClick={() => window.location.reload()} className="w-full py-4 bg-white text-black rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl">THỬ KẾT NỐI LẠI</button>
         </div>
       </div>
     );
@@ -75,7 +76,6 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 }
 
 const App: React.FC = () => {
-  // Snapshot dữ liệu từ Cache để hiện UI ngay lập tức
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const local = localStorage.getItem('ge_user_session');
     if (local) {
@@ -86,44 +86,65 @@ const App: React.FC = () => {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [announcement, setAnnouncement] = useState("GARENAEARN v5.0: ĐÃ CHUYỂN SANG MÁY CHỦ THỰC SUPABASE - TỐC ĐỘ X10 - UY TÍN TUYỆT ĐỐI!");
+  const [announcement, setAnnouncement] = useState("GARENAEARN v5.5: SUPABASE CLOUD ACTIVE - GIAO DỊCH THẬT - UY TÍN TUYỆT ĐỐI!");
   
   const syncRef = useRef(false);
 
-  // Sync trực tiếp với Supabase
+  const hideLoader = useCallback(() => {
+    const loader = document.getElementById('initial-loader');
+    if (loader) {
+      loader.style.opacity = '0';
+      setTimeout(() => {
+        if (loader) loader.style.visibility = 'hidden';
+      }, 500);
+    }
+  }, []);
+
   const syncProfile = useCallback(async () => {
     const session = localStorage.getItem('ge_user_session');
-    if (!session || syncRef.current) return;
+    if (!session) {
+      hideLoader();
+      return;
+    }
+    
+    if (syncRef.current) return;
     
     syncRef.current = true;
     try {
       const userObj = JSON.parse(session);
-      const { data, error } = await supabase
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Supabase Timeout")), 5000)
+      );
+
+      const fetchPromise = supabase
         .from('profiles')
         .select('*')
         .eq('id', userObj.id)
         .single();
 
-      if (data && !error) {
+      const result: any = await Promise.race([fetchPromise, timeoutPromise]);
+      
+      if (result && result.data && !result.error) {
         const updatedUser = { 
-          ...data, 
-          balance: Number(data.balance ?? 0),
-          id: String(data.id)
+          ...result.data, 
+          balance: Number(result.data.balance ?? 0),
+          id: String(result.data.id)
         };
         setCurrentUser(updatedUser);
         localStorage.setItem('ge_user_session', JSON.stringify(updatedUser));
       }
     } catch (err) {
-      console.debug("Supabase background fetch...");
+      console.warn("Supabase Node Busy or Timeout. Operating in Local Mode.");
     } finally {
       syncRef.current = false;
+      hideLoader();
     }
-  }, []);
+  }, [hideLoader]);
 
   useEffect(() => {
     syncProfile();
-    // Realtime Sync: 30 giây một lần
-    const interval = setInterval(syncProfile, 30000);
+    const interval = setInterval(syncProfile, 15000);
     return () => clearInterval(interval);
   }, [syncProfile]);
 
@@ -139,83 +160,87 @@ const App: React.FC = () => {
     localStorage.setItem('ge_user_session', JSON.stringify(sanitized));
   }, []);
 
-  if (!currentUser) return <Login onLogin={(u) => { updateUser(u); syncProfile(); }} />;
+  const handleSidebarClose = () => setIsSidebarOpen(false);
+
+  if (!currentUser) {
+    hideLoader();
+    return <Login onLogin={(u) => { updateUser(u); syncProfile(); }} />;
+  }
 
   return (
     <ErrorBoundary>
       <AppContext.Provider value={{ notify, announcement, updateUser, setAnnouncement, syncProfile }}>
         <HashRouter>
           <div className="min-h-screen flex flex-col bg-[#020617] text-slate-200 overflow-hidden">
-            {/* Thanh thông báo Realtime */}
             <div className="marquee-container shadow-2xl shrink-0 border-b border-white/5">
               <div className="marquee-text italic">{String(announcement)}</div>
             </div>
 
             <div className="flex-1 flex overflow-hidden">
-              {isSidebarOpen && <div className="fixed inset-0 bg-black/90 z-50 lg:hidden backdrop-blur-md" onClick={() => setIsSidebarOpen(false)} />}
+              {isSidebarOpen && <div className="fixed inset-0 bg-black/90 z-50 lg:hidden backdrop-blur-md" onClick={handleSidebarClose} />}
               
               <aside className={`fixed inset-y-0 left-0 w-72 glass border-r border-slate-800/20 z-50 transform transition-all duration-300 lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="h-full flex flex-col p-6">
-                  {/* Thương hiệu Garena Realtime */}
-                  <div className="flex items-center space-x-3 mb-10 px-2 shrink-0">
-                    <GarenaLogo size={40} />
+                  <div className="flex items-center space-x-4 mb-10 px-2 shrink-0">
+                    <GarenaLogo size={42} />
                     <div className="flex flex-col">
-                      <span className="text-xl font-black tracking-tighter uppercase italic leading-none">GARENA<span className="text-amber-500">EARN</span></span>
-                      <div className="flex items-center gap-1 mt-1">
-                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                        <span className="text-[7px] font-black text-slate-500 tracking-[0.3em] uppercase">SUPABASE CORE ONLINE</span>
+                      <span className="text-2xl font-black tracking-tighter uppercase italic leading-none">GARENA<span className="text-amber-500">EARN</span></span>
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+                        <span className="text-[8px] font-black text-slate-400 tracking-[0.3em] uppercase">CLOUD ENGINE</span>
                       </div>
                     </div>
                   </div>
 
-                  <nav className="flex-1 space-y-1 overflow-y-auto no-scrollbar">
+                  <nav className="flex-1 space-y-2 overflow-y-auto no-scrollbar">
                     {currentUser.role === 'ADMIN' && (
-                      <UserNavLink to="/admin" icon={ShieldAlert} label="ADMIN TERMINAL" badge="ROOT" />
+                      <UserNavLink to="/admin" icon={ShieldAlert} label="ROOT TERMINAL" badge="MASTER" />
                     )}
-                    <UserNavLink to="/" icon={LayoutDashboard} label="BẢNG ĐIỀU KHIỂN" />
-                    <UserNavLink to="/tasks" icon={Activity} label="NHIỆM VỤ THỰC" />
-                    <UserNavLink to="/marketplace" icon={Store} label="CHỢ GIAO DỊCH" />
-                    <UserNavLink to="/wallet" icon={Wallet} label="VÍ TÀI CHÍNH" />
-                    <UserNavLink to="/chat" icon={MessageSquare} label="CỘNG ĐỒNG" />
-                    <UserNavLink to="/profile" icon={UserIcon} label="HỒ SƠ CÁ NHÂN" />
+                    <UserNavLink to="/" icon={LayoutDashboard} label="DASHBOARD" />
+                    <UserNavLink to="/tasks" icon={Zap} label="MISSION HUB" />
+                    <UserNavLink to="/marketplace" icon={Store} label="MARKETPLACE" />
+                    <UserNavLink to="/wallet" icon={Wallet} label="FINANCE" />
+                    <UserNavLink to="/chat" icon={MessageSquare} label="COMMUNITY" />
+                    <UserNavLink to="/profile" icon={UserIcon} label="MY PROFILE" />
                   </nav>
 
-                  {/* System Status Info */}
-                  <div className="mt-auto pt-6 border-t border-slate-900/50 space-y-4 shrink-0">
-                    <div className="p-4 bg-slate-900/40 rounded-2xl border border-slate-800/50">
-                       <div className="flex items-center justify-between mb-2">
-                          <span className="text-[8px] font-black text-slate-500 uppercase">Server Latency</span>
-                          <span className="text-[8px] font-black text-emerald-500">12ms</span>
+                  <div className="mt-auto pt-8 border-t border-slate-900/50 space-y-6 shrink-0">
+                    <div className="p-5 bg-slate-900/60 rounded-3xl border border-slate-800/50">
+                       <div className="flex items-center justify-between mb-3">
+                          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest italic">Link Status</span>
+                          <span className="text-[9px] font-black text-emerald-500">Encrypted</span>
                        </div>
-                       <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden">
-                          <div className="w-[90%] h-full bg-emerald-500" />
+                       <div className="flex gap-1">
+                          {[...Array(12)].map((_, i) => (
+                            <div key={i} className={`h-1.5 flex-1 rounded-full ${i < 4 ? 'bg-amber-500' : 'bg-slate-800'}`} />
+                          ))}
                        </div>
                     </div>
-                    <button onClick={() => { localStorage.removeItem('ge_user_session'); window.location.reload(); }} className="w-full flex items-center justify-center space-x-3 py-4 text-slate-600 hover:text-red-500 transition-all font-black text-[9px] uppercase tracking-[0.3em]">
+                    <button onClick={() => { localStorage.removeItem('ge_user_session'); window.location.reload(); }} className="w-full flex items-center justify-center space-x-3 py-4 text-slate-600 hover:text-red-500 transition-all font-black text-[9px] uppercase tracking-[0.4em]">
                       <LogOut size={16} />
-                      <span>THOÁT HỆ THỐNG</span>
+                      <span>DISCONNECT</span>
                     </button>
                   </div>
                 </div>
               </aside>
 
               <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
-                <header className="sticky top-0 z-40 w-full glass border-b border-slate-800/20 px-6 py-4 flex items-center justify-between shrink-0">
+                <header className="sticky top-0 z-40 w-full glass border-b border-slate-800/20 px-8 py-5 flex items-center justify-between shrink-0">
                   <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-slate-400"><Menu size={24} /></button>
                   
-                  <div className="flex items-center space-x-6">
-                    <div className="flex items-center space-x-3 bg-amber-500/5 border border-amber-500/20 px-5 py-2.5 rounded-2xl shadow-inner">
-                      <Trophy size={16} className="text-amber-500" />
-                      <span className="font-black text-white text-md italic tracking-tighter">{Number(currentUser.balance ?? 0).toLocaleString()}đ</span>
+                  <div className="flex items-center space-x-8">
+                    <div className="flex items-center space-x-4 bg-amber-500/5 border border-amber-500/10 px-6 py-2.5 rounded-2xl shadow-inner group">
+                      <Trophy size={18} className="text-amber-500 group-hover:scale-110 transition-transform" />
+                      <span className="font-black text-white text-lg italic tracking-tighter">{Number(currentUser.balance ?? 0).toLocaleString()}đ</span>
                     </div>
-                    <Link to="/profile" className="w-10 h-10 rounded-[14px] border border-slate-800 overflow-hidden shadow-2xl hover:border-amber-500 transition-all">
+                    <Link to="/profile" className="w-11 h-11 rounded-[16px] border border-slate-800 overflow-hidden shadow-2xl hover:border-amber-500 transition-all transform hover:rotate-6">
                       <img src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${String(currentUser.id)}`} alt="av" className="w-full h-full object-cover" />
                     </Link>
                   </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto no-scrollbar p-6 md:p-10">
-                  <div className="max-w-7xl mx-auto w-full pb-20">
+                <div className="flex-1 overflow-y-auto no-scrollbar p-6 md:p-12">
+                  <div className="max-w-7xl mx-auto w-full pb-32">
                     <Routes>
                       <Route path="/" element={<Dashboard user={currentUser} />} />
                       <Route path="/marketplace" element={<Marketplace user={currentUser} />} />
@@ -244,9 +269,9 @@ const App: React.FC = () => {
 };
 
 const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => (
-  <div className={`p-4 border rounded-xl glass shadow-2xl animate-in slide-in-from-right-10 flex items-center gap-3 min-w-[280px] ${toast.type === 'ERROR' ? 'border-red-500/30 text-red-500' : 'border-emerald-500/30 text-emerald-500'}`}>
-    {toast.type === 'ERROR' ? <XCircle size={16} /> : <CheckCircle2 size={16} />}
-    <span className="text-[10px] font-black uppercase tracking-tight italic">{String(toast.message)}</span>
+  <div className={`p-4 border rounded-2xl glass shadow-2xl animate-in slide-in-from-right-10 flex items-center gap-3 min-w-[300px] ${toast.type === 'ERROR' ? 'border-red-500/30 text-red-500' : 'border-emerald-500/30 text-emerald-500'}`}>
+    {toast.type === 'ERROR' ? <XCircle size={18} /> : <CheckCircle2 size={18} />}
+    <span className="text-[11px] font-black uppercase tracking-tight italic">{String(toast.message)}</span>
   </div>
 );
 
@@ -254,12 +279,12 @@ const UserNavLink: React.FC<{ to: string, icon: any, label: string, badge?: stri
   const location = useLocation();
   const active = location.pathname === to;
   return (
-    <Link to={to} className={`flex items-center justify-between px-5 py-4 rounded-2xl transition-all group ${active ? 'bg-white text-slate-950 font-black shadow-2xl' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>
-      <div className="flex items-center space-x-3">
-        <Icon size={18} className={active ? 'text-amber-500' : 'group-hover:text-amber-500 transition-colors'} />
-        <span className="text-[10px] font-black uppercase tracking-[0.2em]">{String(label)}</span>
+    <Link to={to} className={`flex items-center justify-between px-6 py-4 rounded-[20px] transition-all group ${active ? 'bg-white text-slate-950 font-black shadow-2xl scale-[1.02]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>
+      <div className="flex items-center space-x-4">
+        <Icon size={20} className={active ? 'text-amber-500' : 'group-hover:text-amber-500 transition-colors'} />
+        <span className="text-[11px] font-black uppercase tracking-[0.25em]">{String(label)}</span>
       </div>
-      {badge && <span className="text-[7px] px-2 py-0.5 rounded-full bg-red-600 text-white font-black uppercase">{String(badge)}</span>}
+      {badge && <span className="text-[8px] px-2.5 py-0.5 rounded-full bg-red-600 text-white font-black uppercase tracking-widest">{String(badge)}</span>}
     </Link>
   );
 };

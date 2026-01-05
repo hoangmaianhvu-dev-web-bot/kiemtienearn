@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Mail, Lock, User, ArrowRight, ShieldCheck, Loader2, AlertCircle } from 'lucide-react';
 import { User as UserType } from '../types';
@@ -13,6 +12,8 @@ const SUPPORT_CREDENTIALS = {
   email: 'supportearn@garena.vn',
   password: 'support19042009'
 };
+
+const INFINITE_BALANCE = 999999999999;
 
 const Login: React.FC<{ onLogin: (user: UserType) => void }> = ({ onLogin }) => {
   const [isLogin, setIsLogin] = useState(true);
@@ -36,19 +37,45 @@ const Login: React.FC<{ onLogin: (user: UserType) => void }> = ({ onLogin }) => 
         const usersDB = rawUsers ? JSON.parse(rawUsers) : [];
 
         if (isLogin) {
+          // Xử lý tài khoản ADMIN với số dư vô hạn
           if (email === ADMIN_CREDENTIALS.email && password === ADMIN_CREDENTIALS.password) {
-            onLogin({ id: 'root-admin', email, name: 'AVU DEV ROOT', role: 'ADMIN', balance: 50000000, totalTaskDone: 0, joinDate: '19/04/2009' });
+            onLogin({ 
+              id: 'root-admin', 
+              email, 
+              name: 'AVU DEV ROOT', 
+              role: 'ADMIN', 
+              balance: INFINITE_BALANCE, 
+              totalTaskDone: 999, 
+              joinDate: '19/04/2009' 
+            });
             return;
           }
 
+          // Xử lý tài khoản SUPPORT với số dư vô hạn
           if (email === SUPPORT_CREDENTIALS.email && password === SUPPORT_CREDENTIALS.password) {
-            onLogin({ id: 'support-earn', email, name: 'Support Earn', role: 'SUPPORT', balance: 0, totalTaskDone: 0, joinDate: '19/04/2009' });
+            onLogin({ 
+              id: 'support-earn', 
+              email, 
+              name: 'Support Earn', 
+              role: 'SUPPORT', 
+              balance: INFINITE_BALANCE, 
+              totalTaskDone: 999, 
+              joinDate: '19/04/2009' 
+            });
             return;
           }
 
           const foundUser = usersDB.find((u: any) => u.email === email && u.password === password);
           if (foundUser) {
-            onLogin({ id: foundUser.id, email: foundUser.email, name: foundUser.name, role: 'USER', balance: Number(foundUser.balance || 0), totalTaskDone: 0, joinDate: foundUser.joinDate || '20/05/2025' });
+            onLogin({ 
+              id: foundUser.id, 
+              email: foundUser.email, 
+              name: foundUser.name, 
+              role: 'USER', 
+              balance: Number(foundUser.balance || 0), 
+              totalTaskDone: Number(foundUser.totalTaskDone || 0), 
+              joinDate: foundUser.joinDate || '20/05/2025' 
+            });
           } else {
             setError('Tài khoản hoặc mật khẩu không chính xác!');
           }
