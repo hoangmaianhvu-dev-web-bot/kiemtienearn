@@ -25,9 +25,12 @@ import { User, UserStats } from './types.ts';
 export const safeParse = (key: string, fallback: any) => {
   try {
     const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : fallback;
+    if (!item) return fallback;
+    return JSON.parse(item);
   } catch (e) {
     console.error(`Error parsing ${key}:`, e);
+    // Nếu dữ liệu hỏng, xóa nó để tránh crash ở các lần sau
+    localStorage.removeItem(key);
     return fallback;
   }
 };
@@ -71,6 +74,39 @@ const AppContext = createContext<{
 
 export const useNotify = () => useContext(AppContext);
 
+// Fix: ErrorBoundary class was having issues with inherited types for state and props in certain TypeScript environments.
+// Defining explicit interfaces for Props and State and passing them to React.Component resolves "Property 'state' does not exist" and "Property 'props' does not exist" errors.
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-10 text-center">
+          <div className="glass p-10 rounded-[40px] border-red-500/30 max-w-lg">
+            <XCircle className="text-red-500 w-20 h-20 mx-auto mb-6" />
+            <h1 className="text-2xl font-black text-white uppercase mb-4">Lỗi Giao Diện</h1>
+            <p className="text-slate-400 text-sm mb-8">Hệ thống gặp sự cố khi hiển thị trang này. Vui lòng tải lại trang hoặc liên hệ hỗ trợ.</p>
+            <button onClick={() => window.location.reload()} className="px-8 py-3 bg-white text-slate-950 rounded-2xl font-black uppercase text-xs">Tải lại trang</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -95,11 +131,16 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
-    const user = safeParse('ge_user_session', null);
-    if (user) {
-      setCurrentUser(user);
+    try {
+      const user = safeParse('ge_user_session', null);
+      if (user && typeof user === 'object' && user.id) {
+        setCurrentUser(user as User);
+      }
+    } catch (err) {
+      console.error("App init error:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const notify = (message: string, type: ToastType) => {
@@ -111,11 +152,18 @@ const App: React.FC = () => {
   };
 
   const updateUser = (user: User) => {
+    if (!user) return;
     setCurrentUser(user);
     localStorage.setItem('ge_user_session', JSON.stringify(user));
+    
+    // Đồng bộ với DB giả lập
     const usersDB = safeParse('ge_users_db', []);
-    const updatedDB = usersDB.map((u: any) => u.id === user.id ? { ...u, balance: Number(user.balance) } : u);
-    localStorage.setItem('ge_users_db', JSON.stringify(updatedDB));
+    if (Array.isArray(usersDB)) {
+      const updatedDB = usersDB.map((u: any) => 
+        u.id === user.id ? { ...u, balance: Number(user.balance) } : u
+      );
+      localStorage.setItem('ge_users_db', JSON.stringify(updatedDB));
+    }
   };
 
   const handleLogin = (user: User) => {
@@ -129,138 +177,133 @@ const App: React.FC = () => {
     notify("Đã kết thúc phiên làm việc an toàn.", "CANCEL");
   };
 
-  if (loading) return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
-      <div className="mb-6 animate-pulse">
-        <GarenaLogo size={80} />
-      </div>
-      <p className="text-amber-500 font-black text-[10px] uppercase tracking-[0.4em] animate-pulse">GARENAEARN SECURE CONNECTING...</p>
-    </div>
-  );
+  if (loading) return null; // Để Loader ở index.html xử lý
 
   if (!currentUser) return <Login onLogin={handleLogin} />;
 
   return (
-    <AppContext.Provider value={{ notify, announcement, setAnnouncement: (text) => { setAnnouncement(String(text)); localStorage.setItem('ge_announcement', String(text)); }, updateUser }}>
-      <HashRouter>
-        <div className="min-h-screen flex flex-col bg-[#020617] text-slate-200">
-          <div className="marquee-container shadow-2xl">
-            <div className="marquee-text uppercase tracking-widest italic">{String(announcement)}</div>
-          </div>
+    <ErrorBoundary>
+      <AppContext.Provider value={{ notify, announcement, setAnnouncement: (text) => { setAnnouncement(String(text)); localStorage.setItem('ge_announcement', String(text)); }, updateUser }}>
+        <HashRouter>
+          <div className="min-h-screen flex flex-col bg-[#020617] text-slate-200">
+            <div className="marquee-container shadow-2xl">
+              <div className="marquee-text uppercase tracking-widest italic">{String(announcement)}</div>
+            </div>
 
-          <div className="flex-1 flex overflow-hidden">
-            {isSidebarOpen && <div className="fixed inset-0 bg-black/90 z-50 lg:hidden backdrop-blur-xl" onClick={() => setIsSidebarOpen(false)} />}
-            
-            <aside className={`fixed inset-y-0 left-0 w-72 glass border-r border-slate-800/50 z-50 transform transition-transform duration-500 lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-              <div className="h-full flex flex-col p-6">
-                <div className="flex items-center space-x-3 mb-10">
-                  <GarenaLogo size={40} />
-                  <div className="flex flex-col">
-                    <span className="text-xl font-black tracking-tighter uppercase leading-none">GARENA<span className="text-amber-500">EARN</span></span>
-                    <span className="text-[8px] font-black text-slate-500 tracking-[0.3em] mt-1">MANAGEMENT NODE</span>
-                  </div>
-                </div>
-
-                <nav className="flex-1 space-y-1 overflow-y-auto no-scrollbar">
-                  {(currentUser.role === 'ADMIN' || currentUser.role === 'SUPPORT') && (
-                    <UserNavLink to="/admin" icon={ShieldAlert} label="ROOT TERMINAL" badge={String(currentUser.role)} />
-                  )}
-                  <UserNavLink to="/" icon={LayoutDashboard} label="Bảng điều khiển" />
-                  <UserNavLink to="/tasks" icon={() => <GarenaLogo size={18} className="rounded-md" />} label="Làm nhiệm vụ" />
-                  <UserNavLink to="/marketplace" icon={Store} label="CHỢ GIAO DỊCH" />
-                  <UserNavLink to="/links" icon={Trophy} label="Affiliate Hub" />
-                  <UserNavLink to="/chat" icon={MessageSquare} label="Phòng Chat" />
-                  <UserNavLink to="/wallet" icon={Wallet} label="Ví tài chính" />
-                  <UserNavLink to="/profile" icon={UserIcon} label="Hồ sơ cá nhân" />
-                </nav>
-
-                <div className="mt-auto pt-6 border-t border-slate-900">
-                  <button onClick={handleLogout} className="w-full flex items-center justify-center space-x-3 py-4 text-slate-600 hover:text-red-500 transition-all font-black text-[9px] uppercase tracking-[0.3em]">
-                    <LogOut size={16} />
-                    <span>Dừng phiên làm việc</span>
-                  </button>
-                </div>
-              </div>
-            </aside>
-
-            <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto no-scrollbar relative">
-              <header className="sticky top-0 z-40 w-full glass border-b border-slate-800/50 px-6 py-4 flex items-center justify-between">
-                <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-slate-400"><Menu size={24} /></button>
-                
-                <div className="flex-1 max-w-xl mx-8 hidden md:block">
-                   <div className="relative">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-700" size={16} />
-                      <input type="text" placeholder="Tìm kiếm hệ thống..." className="w-full bg-slate-950 border border-slate-900 rounded-2xl py-2.5 pl-12 pr-6 text-[11px] font-black uppercase outline-none focus:border-amber-500/50 transition-all" />
-                   </div>
-                </div>
-
-                <div className="flex items-center space-x-6">
-                  <div className="flex items-center space-x-3 bg-amber-500/5 border border-amber-500/10 px-6 py-2.5 rounded-2xl shadow-inner">
-                    <Trophy size={18} className="text-amber-500" />
-                    <span className="font-black text-white text-lg tracking-tighter italic">{Number(currentUser.balance || 0).toLocaleString()}đ</span>
-                  </div>
-                  <Link to="/profile" className="w-11 h-11 rounded-2xl border-2 border-slate-800 overflow-hidden hover:border-amber-500 transition-all shadow-2xl">
-                    <img src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${String(currentUser.name)}`} alt="avatar" className="w-full h-full object-cover" />
-                  </Link>
-                </div>
-              </header>
-
-              <div className="p-6 md:p-10 max-w-7xl mx-auto w-full pb-32 min-h-screen">
-                <Routes>
-                  <Route path="/" element={<Dashboard stats={userStats} user={currentUser} />} />
-                  <Route path="/marketplace" element={<Marketplace user={currentUser} />} />
-                  <Route path="/chat" element={<ChatRoom user={currentUser} />} />
-                  <Route path="/tasks" element={<TaskList />} />
-                  <Route path="/links" element={<MyLinks stats={userStats} userId={String(currentUser.id)} />} />
-                  <Route path="/wallet" element={<WalletPage user={currentUser} />} />
-                  <Route path="/profile" element={<Profile stats={userStats} />} />
-                  <Route path="/admin" element={(currentUser.role === 'ADMIN' || currentUser.role === 'SUPPORT') ? <AdminPanel /> : <Navigate to="/" />} />
-                  <Route path="*" element={<Navigate to="/" />} />
-                </Routes>
-              </div>
-
-              {/* Support Floating Button */}
-              <div className="fixed bottom-10 right-10 z-[60]">
-                 {isSupportOpen ? (
-                    <div className="glass rounded-[32px] w-80 p-6 border border-amber-500/30 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-in zoom-in-90 slide-in-from-bottom-10 duration-300 mb-4">
-                       <div className="flex justify-between items-center mb-6">
-                          <div className="flex items-center gap-3">
-                             <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center text-slate-950"><Phone size={20} /></div>
-                             <div>
-                                <h3 className="text-sm font-black text-white uppercase italic">Hỗ Trợ Garena</h3>
-                                <p className="text-[8px] font-black text-emerald-500 uppercase">Online 24/7</p>
-                             </div>
-                          </div>
-                          <button onClick={() => setIsSupportOpen(false)} className="text-slate-600 hover:text-white"><X size={20} /></button>
-                       </div>
-                       
-                       <div className="space-y-3">
-                          <SupportLink icon={Phone} label="Zalo: 0337117930" href="https://zalo.me/0337117930" color="bg-blue-600" />
-                          <SupportLink icon={Send} label="Telegram: @VanhTRUM" href="https://t.me/VanhTRUM" color="bg-cyan-500" />
-                          <SupportLink icon={ExternalLink} label="Group Cộng Đồng" href="https://t.me/+JzOTfYqCwAU4MzE1" color="bg-orange-600" />
-                       </div>
+            <div className="flex-1 flex overflow-hidden">
+              {isSidebarOpen && <div className="fixed inset-0 bg-black/90 z-50 lg:hidden backdrop-blur-xl" onClick={() => setIsSidebarOpen(false)} />}
+              
+              <aside className={`fixed inset-y-0 left-0 w-72 glass border-r border-slate-800/50 z-50 transform transition-transform duration-500 lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                <div className="h-full flex flex-col p-6">
+                  <div className="flex items-center space-x-3 mb-10">
+                    <GarenaLogo size={40} />
+                    <div className="flex flex-col">
+                      <span className="text-xl font-black tracking-tighter uppercase leading-none">GARENA<span className="text-amber-500">EARN</span></span>
+                      <span className="text-[8px] font-black text-slate-500 tracking-[0.3em] mt-1">MANAGEMENT NODE</span>
                     </div>
-                 ) : (
-                    <button 
-                      onClick={() => setIsSupportOpen(true)}
-                      className="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center text-slate-950 shadow-[0_10px_40px_rgba(245,158,11,0.4)] hover:scale-110 active:scale-95 transition-all animate-bounce"
-                    >
-                       <MessageCircle size={32} />
-                    </button>
-                 )}
-              </div>
-            </main>
-          </div>
-        </div>
+                  </div>
 
-        {/* Toasts Container */}
-        <div className="fixed top-10 right-6 z-[100] flex flex-col items-end space-y-4 pointer-events-none">
-          {toasts.map(t => (
-            <ToastItem key={t.id} toast={t} onRemove={(id) => setToasts(prev => prev.filter(x => x.id !== id))} />
-          ))}
-        </div>
-      </HashRouter>
-    </AppContext.Provider>
+                  <nav className="flex-1 space-y-1 overflow-y-auto no-scrollbar">
+                    {(currentUser.role === 'ADMIN' || currentUser.role === 'SUPPORT') && (
+                      <UserNavLink to="/admin" icon={ShieldAlert} label="ROOT TERMINAL" badge={String(currentUser.role)} />
+                    )}
+                    <UserNavLink to="/" icon={LayoutDashboard} label="Bảng điều khiển" />
+                    <UserNavLink to="/tasks" icon={() => <GarenaLogo size={18} className="rounded-md" />} label="Làm nhiệm vụ" />
+                    <UserNavLink to="/marketplace" icon={Store} label="CHỢ GIAO DỊCH" />
+                    <UserNavLink to="/links" icon={Trophy} label="Affiliate Hub" />
+                    <UserNavLink to="/chat" icon={MessageSquare} label="Phòng Chat" />
+                    <UserNavLink to="/wallet" icon={Wallet} label="Ví tài chính" />
+                    <UserNavLink to="/profile" icon={UserIcon} label="Hồ sơ cá nhân" />
+                  </nav>
+
+                  <div className="mt-auto pt-6 border-t border-slate-900">
+                    <button onClick={handleLogout} className="w-full flex items-center justify-center space-x-3 py-4 text-slate-600 hover:text-red-500 transition-all font-black text-[9px] uppercase tracking-[0.3em]">
+                      <LogOut size={16} />
+                      <span>Dừng phiên làm việc</span>
+                    </button>
+                  </div>
+                </div>
+              </aside>
+
+              <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto no-scrollbar relative">
+                <header className="sticky top-0 z-40 w-full glass border-b border-slate-800/50 px-6 py-4 flex items-center justify-between">
+                  <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-slate-400"><Menu size={24} /></button>
+                  
+                  <div className="flex-1 max-w-xl mx-8 hidden md:block">
+                     <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-700" size={16} />
+                        <input type="text" placeholder="Tìm kiếm hệ thống..." className="w-full bg-slate-950 border border-slate-900 rounded-2xl py-2.5 pl-12 pr-6 text-[11px] font-black uppercase outline-none focus:border-amber-500/50 transition-all" />
+                     </div>
+                  </div>
+
+                  <div className="flex items-center space-x-6">
+                    <div className="flex items-center space-x-3 bg-amber-500/5 border border-amber-500/10 px-6 py-2.5 rounded-2xl shadow-inner">
+                      <Trophy size={18} className="text-amber-500" />
+                      <span className="font-black text-white text-lg tracking-tighter italic">{Number(currentUser.balance || 0).toLocaleString()}đ</span>
+                    </div>
+                    <Link to="/profile" className="w-11 h-11 rounded-2xl border-2 border-slate-800 overflow-hidden hover:border-amber-500 transition-all shadow-2xl">
+                      <img src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${String(currentUser.name)}`} alt="avatar" className="w-full h-full object-cover" />
+                    </Link>
+                  </div>
+                </header>
+
+                <div className="p-6 md:p-10 max-w-7xl mx-auto w-full pb-32 min-h-screen">
+                  <Routes>
+                    <Route path="/" element={<Dashboard stats={userStats} user={currentUser} />} />
+                    <Route path="/marketplace" element={<Marketplace user={currentUser} />} />
+                    <Route path="/chat" element={<ChatRoom user={currentUser} />} />
+                    <Route path="/tasks" element={<TaskList />} />
+                    <Route path="/links" element={<MyLinks stats={userStats} userId={String(currentUser.id)} />} />
+                    <Route path="/wallet" element={<WalletPage user={currentUser} />} />
+                    <Route path="/profile" element={<Profile stats={userStats} />} />
+                    <Route path="/admin" element={(currentUser.role === 'ADMIN' || currentUser.role === 'SUPPORT') ? <AdminPanel /> : <Navigate to="/" />} />
+                    <Route path="*" element={<Navigate to="/" />} />
+                  </Routes>
+                </div>
+
+                {/* Support Floating Button */}
+                <div className="fixed bottom-10 right-10 z-[60]">
+                   {isSupportOpen ? (
+                      <div className="glass rounded-[32px] w-80 p-6 border border-amber-500/30 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-in zoom-in-90 slide-in-from-bottom-10 duration-300 mb-4">
+                         <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-3">
+                               <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center text-slate-950"><Phone size={20} /></div>
+                               <div>
+                                  <h3 className="text-sm font-black text-white uppercase italic">Hỗ Trợ Garena</h3>
+                                  <p className="text-[8px] font-black text-emerald-500 uppercase">Online 24/7</p>
+                               </div>
+                            </div>
+                            <button onClick={() => setIsSupportOpen(false)} className="text-slate-600 hover:text-white"><X size={20} /></button>
+                         </div>
+                         
+                         <div className="space-y-3">
+                            <SupportLink icon={Phone} label="Zalo: 0337117930" href="https://zalo.me/0337117930" color="bg-blue-600" />
+                            <SupportLink icon={Send} label="Telegram: @VanhTRUM" href="https://t.me/VanhTRUM" color="bg-cyan-500" />
+                            <SupportLink icon={ExternalLink} label="Group Cộng Đồng" href="https://t.me/+JzOTfYqCwAU4MzE1" color="bg-orange-600" />
+                         </div>
+                      </div>
+                   ) : (
+                      <button 
+                        onClick={() => setIsSupportOpen(true)}
+                        className="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center text-slate-950 shadow-[0_10px_40px_rgba(245,158,11,0.4)] hover:scale-110 active:scale-95 transition-all animate-bounce"
+                      >
+                         <MessageCircle size={32} />
+                      </button>
+                   )}
+                </div>
+              </main>
+            </div>
+          </div>
+
+          {/* Toasts Container */}
+          <div className="fixed top-10 right-6 z-[100] flex flex-col items-end space-y-4 pointer-events-none">
+            {toasts.map(t => (
+              <ToastItem key={t.id} toast={t} onRemove={(id) => setToasts(prev => prev.filter(x => x.id !== id))} />
+            ))}
+          </div>
+        </HashRouter>
+      </AppContext.Provider>
+    </ErrorBoundary>
   );
 };
 
