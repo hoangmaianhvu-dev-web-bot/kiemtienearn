@@ -11,9 +11,8 @@
         theme: {
           extend: {
             colors: {
-              slate: {
-                950: '#020617',
-              },
+              slate: { 950: '#020617' },
+              amber: { 500: '#f59e0b' }
             }
           }
         }
@@ -25,19 +24,14 @@
             font-family: 'Inter', sans-serif;
             background-color: #020617;
             color: #f8fafc;
-            overflow-x: hidden;
             margin: 0;
             padding: 0;
+            overflow-x: hidden;
         }
         .glass {
             background: rgba(15, 23, 42, 0.8);
             backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .gradient-text {
-            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
         }
         .marquee-container {
             overflow: hidden;
@@ -64,7 +58,6 @@
             100% { transform: translate(-100%, 0); }
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
         #initial-loader {
             position: fixed;
@@ -75,20 +68,16 @@
             justify-content: center;
             background-color: #020617;
             z-index: 9999;
-            transition: opacity 0.5s ease-out;
         }
         .loader-ring {
-            width: 60px;
-            height: 60px;
-            border: 4px solid #1e293b;
-            border-top: 4px solid #f59e0b;
+            width: 50px;
+            height: 50px;
+            border: 3px solid #1e293b;
+            border-top: 3px solid #f59e0b;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            animation: spin 0.8s linear infinite;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
     </style>
 <script type="importmap">
 {
@@ -99,6 +88,7 @@
     "react-router-dom": "https://esm.sh/react-router-dom@7.1.0",
     "lucide-react": "https://esm.sh/lucide-react@0.460.0",
     "recharts": "https://esm.sh/recharts@2.13.3",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7",
     "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
@@ -107,7 +97,7 @@
 <body class="no-scrollbar">
     <div id="initial-loader">
         <div class="loader-ring"></div>
-        <p style="margin-top: 20px; color: #f59e0b; font-weight: 900; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;">GarenaEarn • Khởi tạo hệ thống...</p>
+        <p style="margin-top: 20px; color: #f59e0b; font-weight: 900; font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase;">GarenaEarn Master Node Connecting...</p>
     </div>
     <div id="root"></div>
 </body>
